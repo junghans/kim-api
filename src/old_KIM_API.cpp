@@ -48,14 +48,17 @@
 #include <locale>
 
 #include "KIM_Model.hpp"
-#include "KIM_COMPUTE_ModelComputeArguments.hpp"
 #include "KIM_Model.h"
-#include "KIM_COMPUTE_ModelComputeArguments.h"
 
-#include "KIM_Simulator.hpp"
-#include "KIM_COMPUTE_SimulatorComputeArguments.hpp"
-#include "KIM_Simulator.h"
-#include "KIM_COMPUTE_SimulatorComputeArguments.h"
+#include "KIM_ModelInitialization.hpp"
+#include "KIM_ModelInitialization.h"
+#include "KIM_ModelReinitialization.hpp"
+#include "KIM_ModelReinitialization.h"
+#include "KIM_ModelDestroy.hpp"
+#include "KIM_ModelDestroy.h"
+#include "KIM_ModelCompute.hpp"
+#include "KIM_ModelCompute.h"
+
 
 // trim from start (in place)
 static inline void ltrim(std::string &s) {
@@ -384,7 +387,7 @@ char const* const KIM_API_model::required_arguments[] =
  "particleSpecies",
  "particleContributing",
  "coordinates",
- "neighObject",
+ "get_neighObject",
  "get_neigh",
  "compute",
  "reinit",
@@ -1551,13 +1554,14 @@ int KIM_API_model::preinit(const char* modelname){
     return result;
 }
 
-int KIM_API_model::no_match_init(int const particleNumbering,
-                                 std::string const & lengthUnit,
-                                 std::string const & energyUnit,
-                                 std::string const & chargeUnit,
-                                 std::string const & temperatureUnit,
-                                 std::string const & timeUnit,
-                                 std::string const & modelname)
+int KIM_API_model::no_match_init(int const numbering,
+                                 std::string const & requestedLengthUnit,
+                                 std::string const & requestedEnergyUnit,
+                                 std::string const & requestedChargeUnit,
+                                 std::string const & requestedTemperatureUnit,
+                                 std::string const & requestedTimeUnit,
+                                 std::string const & modelname,
+                                 int * const requestedUnitsAccepted)
 {
   int error;
   //redirecting std::cout > kimlog
@@ -1623,32 +1627,38 @@ int KIM_API_model::no_match_init(int const particleNumbering,
   }
 
   Unit_Handling testUnits;
-  testUnits.Unit_length = lengthUnit;
-  testUnits.Unit_energy = energyUnit;
-  testUnits.Unit_charge = chargeUnit;
-  testUnits.Unit_temperature = temperatureUnit;
-  testUnits.Unit_time = timeUnit;
-  testUnits.flexible_handling = true;
+  testUnits.Unit_length = requestedLengthUnit;
+  testUnits.Unit_energy = requestedEnergyUnit;
+  testUnits.Unit_charge = requestedChargeUnit;
+  testUnits.Unit_temperature = requestedTemperatureUnit;
+  testUnits.Unit_time = requestedTimeUnit;
 
-  if (!mdl.unit_h.flexible_handling)
+  if ((!mdl.unit_h.flexible_handling)
+    &&
+      !((mdl.unit_h.Unit_length == requestedLengthUnit) &&
+        (mdl.unit_h.Unit_energy == requestedEnergyUnit) &&
+        (mdl.unit_h.Unit_charge == requestedChargeUnit) &&
+        (mdl.unit_h.Unit_temperature == requestedTemperatureUnit) &&
+        (mdl.unit_h.Unit_time == requestedTimeUnit)))
   {
-    std::cout << "* Error (KIM_API_model): Model must be flexible_handling of units" << std::endl;
-    mdl.free();
-    //redirecting back to > std::cout
-    std::cout.rdbuf(backup); filekimlog.close();
-    return KIM_STATUS_FAIL;
+    this->unit_h=mdl.unit_h;
+    *requestedUnitsAccepted = false;
+  }
+  else
+  {
+    this->unit_h=testUnits;
+    *requestedUnitsAccepted = true;
   }
 
   this->name_temp = mdl.model.name;
   this->prestring_init(in_mdlstr);
-  this->unit_h=testUnits;
 
   this->modelVersionMajor = mdl.tempVersionMajor;
   this->modelVersionMinor = mdl.tempVersionMinor;
 
   for (int i=0; i< this->model.size; ++i)
   {
-    (((KIMBaseElement *) this->model.data.p)[i]).flag->calculate = 0;
+    (((KIMBaseElement **) this->model.data.p)[i])->flag->calculate = 0;
   }
 
   // check flag for mdl
@@ -1663,8 +1673,8 @@ int KIM_API_model::no_match_init(int const particleNumbering,
   }
 
   model_index_shift = 0;
-  if ((particleNumbering == 0) && OneBasedLists_mdl) model_index_shift = 1;
-  if ((particleNumbering == 1) && ZeroBasedLists_mdl) model_index_shift = -1;
+  if ((numbering == 0) && OneBasedLists_mdl) model_index_shift = 1;
+  if ((numbering == 1) && ZeroBasedLists_mdl) model_index_shift = -1;
 
   mdl.free();
   char computestr [] = "compute";
@@ -1816,17 +1826,17 @@ int KIM_API_model::model_reinit(){
    int reinit_ind = get_index((char*) "reinit", &error);
    if (error != KIM_STATUS_OK) return error;
 
-   typedef int (*Model_Reinit_cpp)(KIM::Simulator * const);//prototype for model_reinit for c++
-   typedef int (*Model_Reinit_c)(KIM_Simulator * const);//prototype for model_reinit for c
+   typedef int (*Model_Reinit_cpp)(KIM::ModelReinitialization * const);//prototype for model_reinit for c++
+   typedef int (*Model_Reinit_c)(KIM_ModelReinitialization * const);//prototype for model_reinit for c
    KIM::Model MI;
    MI.pimpl = (KIM::Model::ModelImplementation *) this;
-   KIM_Simulator cMI;
+   KIM_ModelReinitialization cMI;
    cMI.p = (void *) &MI;
    Model_Reinit_cpp mdl_reinit_cpp = (Model_Reinit_cpp)(*this)[reinit_ind].data.fp;
    Model_Reinit_c mdl_reinit_c = (Model_Reinit_c)(*this)[reinit_ind].data.fp;
    if (mdl_reinit_cpp == NULL) return KIM_STATUS_FAIL;
    if ((*this)[reinit_ind].lang)
-     return (*mdl_reinit_cpp)((KIM::Simulator *) &MI);
+     return (*mdl_reinit_cpp)((KIM::ModelReinitialization *) &MI);
    else
      return (*mdl_reinit_c)(&cMI);
 }
@@ -1906,9 +1916,9 @@ int KIM_API_model::model_init(){
     std::stringstream model_lang_name;
     model_lang_name << modelname << "_language";
     model_language =  *(int*) dlsym(model_lib_handle,model_lang_name.str().c_str());
-    typedef int (*Model_Init_cpp)(KIM::Simulator * const);//prototype for model_init for c++
-    typedef int (*Model_Init_c)(KIM_Simulator * const);//prototype for model_init for c
-    typedef void (*Model_Init_Fortran)(KIM_Simulator * const, int * const ierr);//prototype for model_init for Fortran
+    typedef int (*Model_Init_cpp)(KIM::ModelInitialization * const);//prototype for model_init for c++
+    typedef int (*Model_Init_c)(KIM_ModelInitialization * const);//prototype for model_init for c
+    typedef void (*Model_Init_Fortran)(KIM_ModelInitialization * const, int * const ierr);//prototype for model_init for Fortran
     std::stringstream model_init_routine_name;
     model_init_routine_name << modelname << "_init_pointer";
     Model_Init_cpp mdl_init_cpp = 0;
@@ -1945,17 +1955,17 @@ int KIM_API_model::model_init(){
     MI.pimpl = (KIM::Model::ModelImplementation *) this;
     if (model_language == 1)
     {
-      err = (*mdl_init_cpp)((KIM::Simulator *) &MI);
+      err = (*mdl_init_cpp)((KIM::ModelInitialization *) &MI);
     }
     else if (model_language == 2)
     {
-      KIM_Simulator cMI;
+      KIM_ModelInitialization cMI;
       cMI.p = (void *) &MI;
       err = (*mdl_init_c)(&cMI);
     }
     else // model_language == 3 // Fortran
     {
-      KIM_Simulator cMI;
+      KIM_ModelInitialization cMI;
       cMI.p = (void *) &MI;
       (*mdl_init_fortran)(&cMI, &err);
     }
@@ -1964,22 +1974,22 @@ int KIM_API_model::model_init(){
 #endif
 
 int KIM_API_model::model_destroy(){
-  typedef int (*Model_Destroy_cpp)(KIM::Simulator * const);//prototype for model_destroy for c++
-  typedef int (*Model_Destroy_c)(KIM_Simulator * const);//prototype for model_destroy for c
-  typedef void (*Model_Destroy_Fortran)(KIM_Simulator * const, int * const ierr);//prototype for model_destroy for Fortran
+  typedef int (*Model_Destroy_cpp)(KIM::ModelDestroy * const);//prototype for model_destroy for c++
+  typedef int (*Model_Destroy_c)(KIM_ModelDestroy * const);//prototype for model_destroy for c
+  typedef void (*Model_Destroy_Fortran)(KIM_ModelDestroy * const, int * const ierr);//prototype for model_destroy for Fortran
   Model_Destroy_cpp mdl_destroy_cpp = (Model_Destroy_cpp) (*this)[(char*) "destroy"].data.fp;
   Model_Destroy_c mdl_destroy_c = (Model_Destroy_c) (*this)[(char*) "destroy"].data.fp;
   Model_Destroy_Fortran mdl_destroy_fortran = (Model_Destroy_Fortran) (*this)[(char*) "destroy"].data.fp;
   //call model_destroy
   KIM::Model MI;
   MI.pimpl = (KIM::Model::ModelImplementation *) this;
-  KIM_Simulator cMI;
+  KIM_ModelDestroy cMI;
   cMI.p = (void *) &MI;
 
   int error = false;
   if (mdl_destroy_cpp != NULL) {
     if ((*this)[(char*) "destroy"].lang == 1)
-      error = (*mdl_destroy_cpp)((KIM::Simulator *) &MI);
+      error = (*mdl_destroy_cpp)((KIM::ModelDestroy *) &MI);
     else if ((*this)[(char*) "destroy"].lang == 2)
       error = (*mdl_destroy_c)(&cMI);
     else // Fortran
@@ -1991,11 +2001,11 @@ int KIM_API_model::model_destroy(){
 #endif
   return error;
 }
-int KIM_API_model::model_compute(KIM::COMPUTE::SimulatorComputeArguments const * const arguments){
+int KIM_API_model::model_compute(){
   // set model_compute pointer
-  typedef int (*Model_Compute_cpp)(KIM::Simulator const * const, KIM::COMPUTE::SimulatorComputeArguments const * const);//prototype for model_compute for c++
-  typedef int (*Model_Compute_c)(KIM_Simulator const * const, KIM_COMPUTE_SimulatorComputeArguments const * const);//prototype for model_compute for c
-  typedef void (*Model_Compute_Fortran)(KIM_Simulator const * const, KIM_COMPUTE_SimulatorComputeArguments const * const, int * const ierr);//prototype for model_compute for fortran
+  typedef int (*Model_Compute_cpp)(KIM::ModelCompute const * const);//prototype for model_compute for c++
+  typedef int (*Model_Compute_c)(KIM_ModelCompute const * const);//prototype for model_compute for c
+  typedef void (*Model_Compute_Fortran)(KIM_ModelCompute const * const, int * const ierr);//prototype for model_compute for fortran
   int error = KIM_STATUS_FAIL;
   Model_Compute_cpp mdl_compute_cpp = (Model_Compute_cpp) (*this)[compute_index].data.fp;
   Model_Compute_c mdl_compute_c = (Model_Compute_c) (*this)[compute_index].data.fp;
@@ -2006,32 +2016,28 @@ int KIM_API_model::model_compute(KIM::COMPUTE::SimulatorComputeArguments const *
   {
     if (mdl_compute_cpp == NULL) return error;
     //call model_compute
-    error = (*mdl_compute_cpp)((KIM::Simulator *) &MI, arguments);
+    error = (*mdl_compute_cpp)((KIM::ModelCompute *) &MI);
   }
   else if ((*this)[compute_index].lang == 2)
   {
     if (mdl_compute_c == NULL) return error;
     //call model_compute
-    KIM_Simulator cMI;
+    KIM_ModelCompute cMI;
     cMI.p = (void *) &MI;
-    KIM_COMPUTE_SimulatorComputeArguments cSCA;
-    cSCA.p = (void *) arguments;
-    error = (*mdl_compute_c)(&cMI, &cSCA);
+    error = (*mdl_compute_c)(&cMI);
   }
   else // Fortran
   {
     if (mdl_compute_fortran == NULL) return error;
     //call model_compute
-    KIM_Simulator cMI;
+    KIM_ModelCompute cMI;
     cMI.p = (void *) &MI;
-    KIM_COMPUTE_SimulatorComputeArguments cSCA;
-    cSCA.p = (void *) arguments;
-    (*mdl_compute_fortran)(&cMI, &cSCA, &error);
+    (*mdl_compute_fortran)(&cMI, &error);
   }
   return error;
 }
 
-int KIM_API_model::get_neigh(KIM::COMPUTE::SimulatorComputeArguments const * const arguments, int neighborListIndex, int request, int *numnei, int** nei1part){
+int KIM_API_model::get_neigh(int neighborListIndex, int request, int *numnei, int** nei1part){
   typedef int (*Get_Neigh_cpp)(void const * const, int, int, int *, int **);
   typedef int (*Get_Neigh_c)(void const * const, int, int, int *, int **);
   typedef void (*Get_Neigh_Fortran)(void const * const , int, int, int *, int **, int *);
@@ -2041,7 +2047,7 @@ int KIM_API_model::get_neigh(KIM::COMPUTE::SimulatorComputeArguments const * con
     Get_Neigh_c get_neigh_c = (Get_Neigh_c)(*this)[get_neigh_index].data.fp;
     Get_Neigh_Fortran get_neigh_fortran = (Get_Neigh_Fortran)(*this)[get_neigh_index].data.fp;
 
-    void const * const dataObject = (*this)["neighObject"].data.p;
+    void const * const dataObject = (*this)["get_neighObject"].data.p;
 
     if (model_index_shift==0) {
       int erkey = true;
@@ -2376,45 +2382,44 @@ void * KIM_API_model::get_sim_buffer(int* ier){
     return test_buffer;
 }
 
-int KIM_API_model::process_dEdr(KIM_API_model** ppkim, double* dE, double* r,
-        double** dx,int *i, int *j){
+int KIM_API_model::process_dEdr(double* dE, double* r, double** dx,int *i, int *j){
    int ier = KIM_STATUS_OK;;
-    KIM_API_model * pkim= *ppkim;
-    typedef int (*Process_d1Edr)(KIM_API_model **, double *, double *, double **,int *,int *);
+    typedef int (*Process_d1Edr)(void *, double *, double *, double **,int *,int *);
 
-    Process_d1Edr process = (Process_d1Edr) (*pkim)["process_dEdr"].data.fp;
+    Process_d1Edr process = (Process_d1Edr) (*this)["process_dEdr"].data.fp;
     int process_flag =0;
-    process_flag = (*pkim)["process_dEdr"].flag->calculate;
+    process_flag = (*this)["process_dEdr"].flag->calculate;
+    void * process_Obj = (*this)["process_dEdrObject"].data.p;
 
-    if (process != NULL && process_flag == 1 && pkim->model_index_shift == 0) {
-        ier = (*process)(ppkim,dE,r,dx,i,j);
+    if (process != NULL && process_flag == 1 && model_index_shift == 0) {
+        ier = (*process)(process_Obj,dE,r,dx,i,j);
     }else{
-        int i2send = *i-pkim->model_index_shift;
-        int j2send = *j-pkim->model_index_shift;
-        ier = (*process)(ppkim,dE,r,dx,&i2send,&j2send);
+        int i2send = *i-model_index_shift;
+        int j2send = *j-model_index_shift;
+        ier = (*process)(process_Obj,dE,r,dx,&i2send,&j2send);
     }
 
     return ier;
 }
 
-int KIM_API_model::process_d2Edr2(KIM_API_model **ppkim,double *de,double **r,double ** pdx,int **i,int **j){
+int KIM_API_model::process_d2Edr2(double *de,double **r,double ** pdx,int **i,int **j){
    int ier = KIM_STATUS_OK;
-    KIM_API_model * pkim= *ppkim;
-    typedef int (*Process_d2Edr)(KIM_API_model **, double *, double **, double **,int **,int **);
+    typedef int (*Process_d2Edr)(void *, double *, double **, double **,int **,int **);
 
-    Process_d2Edr process = (Process_d2Edr) (*pkim)["process_d2Edr2"].data.fp;
+    Process_d2Edr process = (Process_d2Edr) (*this)["process_d2Edr2"].data.fp;
     int process_flag =0;
-    process_flag = (*pkim)["process_d2Edr2"].flag->calculate;
+    process_flag = (*this)["process_d2Edr2"].flag->calculate;
+    void * process_Obj = (*this)["process_d2Edr2Object"].data.p;
 
-    if (process != NULL && process_flag == 1 && pkim->model_index_shift == 0) {
-       ier = (*process)(ppkim,de,r,pdx,i,j);
+    if (process != NULL && process_flag == 1 && model_index_shift == 0) {
+       ier = (*process)(process_Obj,de,r,pdx,i,j);
     }else{
-        int k=pkim->model_index_shift;
+        int k=model_index_shift;
         int i2send[2];   i2send[0]=(*i)[0]-k; i2send[1]=(*i)[1]-k;
         int j2send[2];   j2send[0]=(*j)[0]-k; j2send[1]=(*j)[1]-k;
         int *pi = &i2send[0];
         int *pj = &j2send[0];
-        ier = (*process)(ppkim,de,r,pdx,&pi,&pj);
+        ier = (*process)(process_Obj,de,r,pdx,&pi,&pj);
     }
 
     return ier;
@@ -2714,6 +2719,14 @@ int KIM_API_model::get_attribute(const char *nm, int* error){
     *error = KIM_STATUS_FAIL;
     if ((I < 0) || (I >= model.size)) return KIM_STATUS_ARG_UNKNOWN;
     *error = KIM_STATUS_OK;
+    for (int m=0; m<NUMBER_REQUIRED_ARGUMENTS; ++m)
+    {
+      if (std::string(KIM_API_model::required_arguments[m]) == (*this)[I].name)
+      {
+        return -1;
+      }
+    }
+
     return (*this)[I].optional;
  }
 

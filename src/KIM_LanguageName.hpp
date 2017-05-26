@@ -40,8 +40,9 @@ namespace KIM
 {
 class LanguageName
 {
-  int languageID;
  public:
+  int languageID;
+
   LanguageName();
   LanguageName(int const id);
   bool operator==(LanguageName const & rhs) const;

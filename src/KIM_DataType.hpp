@@ -41,8 +41,9 @@ namespace KIM
 
 class DataType
 {
-  int dataTypeID;
  public:
+  int dataTypeID;
+
   DataType();
   DataType(int const id);
   bool operator==(DataType const & rhs) const;

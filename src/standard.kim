@@ -546,7 +546,7 @@ OneBasedLists               flag        # Presence of this line indicates that
 # distance.
 #
 # All models need `coordinates', a full neighbor list (with data stored in the
-# `neighObject' argument), and the `get_neigh' method supplied by the
+# `get_neighObject' argument), and the `get_neigh' method supplied by the
 # Simulator.
 #
 # The Model receives the number of particles, coordinates and a full neighbor
@@ -708,6 +708,7 @@ get_neigh                   method       none
 # Name                      Type         Unit
 #
 process_dEdr                method       none
+process_dEdrObject          pointer      none
 
 ################################################################################
 #
@@ -730,8 +731,8 @@ process_d2Edr2              method       none
 
 ################################################################################
 #
-# neighObject : A pointer to the data for the neighbor list that is provided by
-#               the Simulator.
+# get_neighObject : A pointer to the data for the neighbor list that is
+#                   provided by the Simulator.
 #
 # This argument is required for all Models and Simulators.  The Simulator must
 # register a pointer in the KIM API object (via KIM_API_set_data()) before the
@@ -740,8 +741,8 @@ process_d2Edr2              method       none
 #
 # Name                      Type         Unit
 #
-neighObject                 pointer      none
-
+get_neighObject             pointer      none
+process_d2Edr2Object        pointer      none
 
 ################################################################################
 #

@@ -31,12 +31,14 @@
 #ifndef LENNARD_JONES_612_HPP_
 #define LENNARD_JONES_612_HPP_
 
-#include "KIM_Simulator.hpp"
-#include "KIM_COMPUTE_SimulatorComputeArguments.hpp"
+#include "KIM_ModelInitialization.hpp"
+#include "KIM_ModelReinitialization.hpp"
+#include "KIM_ModelDestroy.hpp"
+#include "KIM_ModelCompute.hpp"
 
 extern "C"
 {
-int model_driver_init(KIM::Simulator * const simulator,
+int model_driver_init(KIM::ModelInitialization * const modelInitialization,
                       char const * const paramfile_names, int const nmstrlen,
                       int const numparamfiles);
 }
@@ -46,7 +48,7 @@ class LennardJones612Implementation;
 class LennardJones612
 {
  public:
-  LennardJones612(KIM::Simulator* const simulator,
+  LennardJones612(KIM::ModelInitialization* const modelInitialization,
                   char const* const parameterFileNames,
                   int const parameterFileNameLength,
                   int const numberParameterFiles,
@@ -56,11 +58,9 @@ class LennardJones612
   // no need to make these "extern" since KIM will only access them
   // via function pointers.  "static" is required so that there is not
   // an implicit this pointer added to the prototype by the C++ compiler
-  static int Destroy(KIM::Simulator * const simulator);
-  static int Reinit(KIM::Simulator * const simulator);
-  static int Compute(KIM::Simulator const * const simulator,
-                     KIM::COMPUTE::SimulatorComputeArguments
-                     const * const arguments);
+  static int Destroy(KIM::ModelDestroy * const modelDestroy);
+  static int Reinit(KIM::ModelReinitialization * const modelReinitialization);
+  static int Compute(KIM::ModelCompute const * const modelCompute);
 
  private:
   LennardJones612Implementation* implementation_;

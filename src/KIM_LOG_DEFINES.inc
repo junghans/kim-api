@@ -1,0 +1,12 @@
+#ifndef KIM_LOG_LEVEL_DEFINES_
+#define KIM_LOG_LEVEL_DEFINES_
+
+#define KIM_LOG_LEVEL_SILENT_      0
+#define KIM_LOG_LEVEL_FATAL_       1
+#define KIM_LOG_LEVEL_ERROR_       2
+#define KIM_LOG_LEVEL_WARNING_     3
+#define KIM_LOG_LEVEL_INFORMATION_ 4
+#define KIM_LOG_LEVEL_DEBUG_       5
+
+#define KIM_LOG_MAXIMUM_LEVEL KIM_LOG_LEVEL_ERROR_
+#endif

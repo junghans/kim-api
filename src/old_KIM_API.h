@@ -46,8 +46,6 @@
 #include "old_KIM_API_Version.h"
 #include "old_Unit_Handling.h"
 
-#include "KIM_COMPUTE_SimulatorComputeArguments.hpp"
-
 namespace KIM
 {
 class Model;
@@ -177,18 +175,19 @@ public:
     int get_compute(const char *nm, int* error);
     void print(int *error);
 
-  int no_match_init(int const particleNumbering,
-                    std::string const & lengthUnit,
-                    std::string const & energyUnit,
-                    std::string const & chargeUnit,
-                    std::string const & temperatureUnit,
-                    std::string const & timeUnit,
-                    std::string const & modelname);
+  int no_match_init(int const numbering,
+                    std::string const & requestedLengthUnit,
+                    std::string const & requestedEnergyUnit,
+                    std::string const & requestedChargeUnit,
+                    std::string const & requestedTemperatureUnit,
+                    std::string const & requestedTimeUnit,
+                    std::string const & modelname,
+                    int * const requestedUnitsAccepted);
 
     int string_init(const char * intststr,const char * modelname);
    int match(const char* simstring, const char* modelstring);
-  int model_compute(KIM::COMPUTE::SimulatorComputeArguments const * const arguments);
-  int get_neigh(KIM::COMPUTE::SimulatorComputeArguments const * const arguments, int neighborListIndex, int request, int *numnei, int **nei1part);
+  int model_compute();
+  int get_neigh(int neighborListIndex, int request, int *numnei, int **nei1part);
     int model_init();
     int model_reinit();
     int model_destroy();
@@ -215,9 +214,9 @@ void set_species_code(const char *species, int code, int* error);
     void set_sim_buffer(void * o,int *error);
     void * get_sim_buffer(int *error);
 
-   static int process_dEdr(KIM_API_model **ppkim,double *dr,double *r,double ** dx, int *i,int *j);
+   int process_dEdr(double *dr,double *r,double ** dx, int *i,int *j);
 
-   static int process_d2Edr2(KIM_API_model **ppkim,double *de,double **rr,double ** pdx,int **ii,int **jj);
+   int process_d2Edr2(double *de,double **rr,double ** pdx,int **ii,int **jj);
 
   static int get_model_kim_str(const char* const modelname, char** const kimString);
 

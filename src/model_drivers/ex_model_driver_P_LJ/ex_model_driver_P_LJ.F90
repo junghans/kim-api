@@ -1,3 +1,4 @@
+
 !
 ! CDDL HEADER START
 !
@@ -47,8 +48,6 @@
 module ex_model_driver_p_lj
 
 use, intrinsic :: iso_c_binding
-use kim_simulator_module
-use kim_logger_module
 implicit none
 
 save
@@ -209,15 +208,14 @@ end subroutine calc_phi_dphi_d2phi
 ! Compute energy and forces on particles from the positions.
 !
 !-------------------------------------------------------------------------------
-subroutine Compute_Energy_Forces(simulator, arguments, ierr) bind(c)
-use kim_simulator_module
-use kim_compute_argument_name_module
-use kim_compute_simulator_compute_arguments_module
+subroutine Compute_Energy_Forces(model_compute, ierr) bind(c)
+use kim_model_compute_module
+use kim_argument_name_module
+use kim_call_back_name_module
 implicit none
 
 !-- Transferred variables
-type(kim_simulator_type), intent(in) :: simulator
-type(kim_compute_simulator_compute_arguments_type), intent(in) :: arguments
+type(kim_model_compute_type), intent(in) :: model_compute
 integer(c_int), intent(out) :: ierr
 
 !-- Local variables
@@ -246,7 +244,7 @@ integer(c_int), pointer :: particleContributing(:)
 
 
 ! get model buffer from KIM object
-call kim_simulator_get_model_buffer(simulator, pbuf)
+call kim_model_compute_get_model_buffer(model_compute, pbuf)
 call c_f_pointer(pbuf, buf)
 
 model_cutoff = buf%influence_distance(1)
@@ -254,20 +252,12 @@ model_cutoff = buf%influence_distance(1)
 ! Check to see if we have been asked to compute the forces, energyperpart,
 ! energy and d1Edr
 !
-call kim_compute_simulator_compute_arguments_get_p_dedr_compute(arguments, &
-  comp_process_dedr)
-call kim_compute_simulator_compute_arguments_get_p_d2edr2_compute(arguments, &
-  comp_process_d2edr2)
-
 ierr = 0
-call kim_compute_simulator_compute_arguments_get_compute(arguments, &
-  kim_compute_argument_name_energy, comp_energy, ierr2)
+call kim_model_compute_is_call_back_present(model_compute, &
+  kim_call_back_name_process_dedr, comp_process_dedr, ierr2)
 ierr = ierr + ierr2
-call kim_compute_simulator_compute_arguments_get_compute(arguments, &
-  kim_compute_argument_name_forces, comp_force, ierr2)
-ierr = ierr + ierr2
-call kim_compute_simulator_compute_arguments_get_compute(arguments, &
-  kim_compute_argument_name_particle_energy, comp_enepot, ierr2)
+call kim_model_compute_is_call_back_present(model_compute, &
+  kim_call_back_name_process_d2edr2, comp_process_d2edr2, ierr2)
 ierr = ierr + ierr2
 if (ierr /= 0) then
    call kim_report_error(__LINE__, THIS_FILE_NAME,        &
@@ -279,28 +269,30 @@ endif
 ! Unpack data from KIM object
 !
 ierr = 0
-call kim_compute_simulator_compute_arguments_get_data(arguments, &
-  kim_compute_argument_name_number_of_particles, n, ierr2)
+call kim_model_compute_get_data(model_compute, &
+  kim_argument_name_number_of_particles, &
+  n, ierr2)
 ierr = ierr + ierr2
 
-call kim_compute_simulator_compute_arguments_get_data(arguments, &
-  kim_compute_argument_name_particle_species, n, particlespecies, ierr2)
+call kim_model_compute_get_data(model_compute, &
+  kim_argument_name_particle_species, &
+  n, particlespecies, ierr2)
 ierr = ierr + ierr2
-call kim_compute_simulator_compute_arguments_get_data(arguments, &
-  kim_compute_argument_name_particle_contributing, n, particlecontributing, &
+call kim_model_compute_get_data(model_compute, &
+  kim_argument_name_particle_contributing, n, particlecontributing, &
   ierr2)
 ierr = ierr + ierr2
-call kim_compute_simulator_compute_arguments_get_data(arguments, &
-  kim_compute_argument_name_coordinates, dim, n, coor, ierr2)
+call kim_model_compute_get_data(model_compute, &
+  kim_argument_name_coordinates, dim, n, coor, ierr2)
 ierr = ierr + ierr2
-call kim_compute_simulator_compute_arguments_get_data(arguments, &
-  kim_compute_argument_name_energy, energy, ierr2)
+call kim_model_compute_get_data(model_compute, &
+  kim_argument_name_energy, energy, ierr2)
 ierr = ierr + ierr2
-call kim_compute_simulator_compute_arguments_get_data(arguments, &
-  kim_compute_argument_name_forces, dim, n, force, ierr2)
+call kim_model_compute_get_data(model_compute, &
+  kim_argument_name_forces, dim, n, force, ierr2)
 ierr = ierr + ierr2
-call kim_compute_simulator_compute_arguments_get_data(arguments, &
-  kim_compute_argument_name_particle_energy, n, enepot, ierr2)
+call kim_model_compute_get_data(model_compute, &
+  kim_argument_name_particle_energy, n, enepot, ierr2)
 ierr = ierr + ierr2
 if (ierr /= 0) then
    call kim_report_error(__LINE__, THIS_FILE_NAME,     &
@@ -308,6 +300,22 @@ if (ierr /= 0) then
                                ierr)
    return
 endif
+
+if (associated(energy)) then
+  comp_energy =  1
+else
+  comp_energy = 0
+end if
+if (associated(force)) then
+  comp_force = 1
+else
+  comp_force = 0
+end if
+if (associated(enepot)) then
+  comp_enepot = 1
+else
+  comp_enepot = 0
+end if
 
 allocate( Rij(DIM) )
 if (comp_process_d2Edr2.eq.1) then
@@ -348,8 +356,8 @@ do i = 1, N
   if (particleContributing(i) == 1) then
     ! Set up neighbor list for next particle
     !
-    call kim_compute_simulator_compute_arguments_get_neigh( &
-      arguments, 1, i, numnei, nei1part, ierr)
+    call kim_model_compute_get_neigh(model_compute, 1, i, numnei, nei1part, &
+      ierr)
     if (ierr /= 0) then
       ! some sort of problem, exit
       call kim_report_error(__LINE__, THIS_FILE_NAME, &
@@ -413,8 +421,8 @@ do i = 1, N
         ! contribution to process_dEdr
         !
         if (comp_process_dEdr.eq.1) then
-          call kim_compute_simulator_compute_arguments_process_dedr( &
-            arguments, deidr, r, c_loc(rij(1)), i, j, ierr)
+          call kim_model_compute_process_dedr( &
+            model_compute, deidr, r, c_loc(rij(1)), i, j, ierr)
         endif
 
         ! contribution to process_d2Edr2
@@ -428,8 +436,8 @@ do i = 1, N
           j_pairs(1) = j
           j_pairs(2) = j
 
-          call kim_compute_simulator_compute_arguments_process_d2edr2( &
-            arguments, d2eidr, &
+          call kim_model_compute_process_d2edr2( &
+            model_compute, d2eidr, &
             c_loc(r_pairs(1)),     &
             c_loc(Rij_pairs(1,1)), &
             c_loc(i_pairs(1)),     &
@@ -473,13 +481,13 @@ end subroutine Compute_Energy_Forces
 ! Model driver reinitialization routine
 !
 !-------------------------------------------------------------------------------
-subroutine reinit(simulator, ierr) bind(c)
-use kim_simulator_module
+subroutine reinit(model_reinitialization, ierr) bind(c)
+use kim_model_reinitialization_module
 use kim_logger_module
 implicit none
 
 !-- Transferred variables
-type(kim_simulator_type), intent(inout) :: simulator
+type(kim_model_reinitialization_type), intent(inout) :: model_reinitialization
 integer(c_int), intent(out) :: ierr
 
 !-- Local variables
@@ -487,12 +495,17 @@ real(c_double) energy_at_cutoff
 type(BUFFER_TYPE), pointer :: buf; type(c_ptr) :: pbuf
 
 ! get model buffer from KIM object
-call kim_simulator_get_model_buffer(simulator, pbuf)
+call kim_model_reinitialization_get_model_buffer(model_reinitialization, pbuf)
 call c_f_pointer(pbuf, buf)
+
+call kim_model_reinitialization_set_influence_distance(model_reinitialization, &
+  buf%influence_distance(1))
+call kim_model_reinitialization_set_cutoffs(model_reinitialization, 1, &
+  buf%influence_distance)
 
 ! Set new values in KIM object and buffer
 !
-buf%influence_distance = buf%Pcutoff
+buf%influence_distance(1) = buf%Pcutoff
 buf%cutsq = (buf%Pcutoff)**2
 ! calculate pair potential at r=cutoff with shift=0.0
 call calc_phi(buf%epsilon, &
@@ -512,19 +525,19 @@ end subroutine reinit
 ! Model driver destroy routine
 !
 !-------------------------------------------------------------------------------
-subroutine destroy(simulator, ierr) bind(c)
-use kim_simulator_module
+subroutine destroy(model_destroy, ierr) bind(c)
+use kim_model_destroy_module
 implicit none
 
 !-- Transferred variables
-type(kim_simulator_type), intent(inout) :: simulator
+type(kim_model_destroy_type), intent(inout) :: model_destroy
 integer(c_int), intent(out) :: ierr
 
 !-- Local variables
 type(BUFFER_TYPE), pointer :: buf; type(c_ptr) :: pbuf
 
 ! get model buffer from KIM object
-call kim_simulator_get_model_buffer(simulator, pbuf)
+call kim_model_destroy_get_model_buffer(model_destroy, pbuf)
 call c_f_pointer(pbuf, buf)
 
 deallocate( buf )
@@ -541,19 +554,19 @@ end module ex_model_driver_p_lj
 ! Model driver initialization routine (REQUIRED)
 !
 !-------------------------------------------------------------------------------
-subroutine model_driver_init(simulator, pparamfile, nmstrlen, numparamfiles, ierr) &
-  bind(c)
+subroutine model_driver_init(model_initialization, pparamfile, nmstrlen, &
+  numparamfiles, ierr) bind(c)
 
 use, intrinsic :: iso_c_binding
 use ex_model_driver_p_lj
-use kim_simulator_module
-use kim_model_module
+use kim_model_initialization_module
+use kim_language_name_module
 use kim_unit_system_module
 implicit none
 integer(c_int), parameter :: cd = c_double ! used for literal constants
 
 !-- Transferred variables
-type(kim_simulator_type), intent(inout) :: simulator
+type(kim_model_initialization_type), intent(inout) :: model_initialization
 type(c_ptr), value, intent(in) :: pparamfile
 integer(c_int), value,    intent(in) :: nmstrlen
 integer(c_int), value,    intent(in) :: numparamfiles
@@ -580,12 +593,12 @@ do i = 1, numparamfiles
 end do
 
 ! store function pointers in KIM object
-call kim_simulator_set_compute_func(simulator, kim_language_name_fortran, &
-  c_funloc(Compute_Energy_Forces))
-call kim_simulator_set_reinit(simulator, kim_language_name_fortran, &
-  c_funloc(reinit))
-call kim_simulator_set_destroy(simulator, kim_language_name_fortran, &
-  c_funloc(destroy))
+call kim_model_initialization_set_compute_func(model_initialization, &
+  kim_language_name_fortran, c_funloc(Compute_Energy_Forces))
+call kim_model_initialization_set_reinit(model_initialization, &
+  kim_language_name_fortran, c_funloc(reinit))
+call kim_model_initialization_set_destroy(model_initialization, &
+  kim_language_name_fortran, c_funloc(destroy))
 
 ! Read in model parameters from parameter file
 !
@@ -606,12 +619,12 @@ goto 42
 200 continue
 
 ! convert to appropriate units
-call kim_simulator_convert_to_act_unit(simulator, &
-  kim_units_a, &
-  kim_units_ev, &
-  kim_units_e, &
-  kim_units_k, &
-  kim_units_ps, &
+call kim_model_initialization_convert_to_act_unit(model_initialization, &
+  kim_length_unit_a, &
+  kim_energy_unit_ev, &
+  kim_charge_unit_e, &
+  kim_temperature_unit_k, &
+  kim_time_unit_ps, &
   1.0_cd, 0.0_cd, 0.0_cd, 0.0_cd, 0.0_cd, factor, ierr)
 if (ierr /= 0) then
   call kim_report_error(__LINE__, THIS_FILE_NAME, &
@@ -620,12 +633,12 @@ if (ierr /= 0) then
 endif
 in_cutoff = in_cutoff * factor
 
-call kim_simulator_convert_to_act_unit(simulator, &
-  kim_units_a, &
-  kim_units_ev, &
-  kim_units_e, &
-  kim_units_k, &
-  kim_units_ps, &
+call kim_model_initialization_convert_to_act_unit(model_initialization, &
+  kim_length_unit_a, &
+  kim_energy_unit_ev, &
+  kim_charge_unit_e, &
+  kim_temperature_unit_k, &
+  kim_time_unit_ps, &
   0.0_cd, 1.0_cd, 0.0_cd, 0.0_cd, 0.0_cd, factor, ierr)
 if (ierr /= 0) then
    call kim_report_error(__LINE__, THIS_FILE_NAME, &
@@ -634,12 +647,12 @@ if (ierr /= 0) then
 endif
 in_epsilon = in_epsilon * factor
 
-call kim_simulator_convert_to_act_unit(simulator, &
-  kim_units_a, &
-  kim_units_ev, &
-  kim_units_e, &
-  kim_units_k, &
-  kim_units_ps, &
+call kim_model_initialization_convert_to_act_unit(model_initialization, &
+  kim_length_unit_a, &
+  kim_energy_unit_ev, &
+  kim_charge_unit_e, &
+  kim_temperature_unit_k, &
+  kim_time_unit_ps, &
   1.0_cd, 0.0_cd, 0.0_cd, 0.0_cd, 0.0_cd, factor, ierr)
 if (ierr /= 0) then
    call kim_report_error(__LINE__, THIS_FILE_NAME, &
@@ -665,30 +678,35 @@ call calc_phi(in_epsilon, &
 buf%shift   = -energy_at_cutoff
 
 ! store model cutoff in KIM object
-call kim_simulator_set_influence_distance(simulator, buf%influence_distance(1))
-call kim_simulator_set_cutoffs(simulator, 1, buf%influence_distance)
+call kim_model_initialization_set_influence_distance(model_initialization, &
+  buf%influence_distance(1))
+call kim_model_initialization_set_cutoffs(model_initialization, 1, &
+  buf%influence_distance)
 
 ! end setup buffer
 
 ! store in model buffer
-call kim_simulator_set_model_buffer(simulator, c_loc(buf))
+call kim_model_initialization_set_model_buffer(model_initialization, c_loc(buf))
 
 ! set pointers to parameters in KIM object
-call kim_simulator_set_parameter(simulator, cutoff_index, 1, c_loc(buf%pcutoff), ierr)
+call kim_model_initialization_set_parameter(model_initialization, &
+  cutoff_index, 1, c_loc(buf%pcutoff), ierr)
 if (ierr /= 0) then
    call kim_report_error(__LINE__, THIS_FILE_NAME, &
                                "set_parameter", ierr);
    goto 42
 endif
 
-call kim_simulator_set_parameter(simulator, epsilon_index, 1, c_loc(buf%epsilon), ierr)
+call kim_model_initialization_set_parameter(model_initialization, &
+  epsilon_index, 1, c_loc(buf%epsilon), ierr)
 if (ierr /= 0) then
    call kim_report_error(__LINE__, THIS_FILE_NAME, &
                                "set_parameter", ierr);
    goto 42
 endif
 
-call kim_simulator_set_parameter(simulator, sigma_index, 1, c_loc(buf%sigma), ierr)
+call kim_model_initialization_set_parameter(model_initialization, &
+  sigma_index, 1, c_loc(buf%sigma), ierr)
 if (ierr /= 0) then
    call kim_report_error(__LINE__, THIS_FILE_NAME, &
                                "set_parameter", ierr);

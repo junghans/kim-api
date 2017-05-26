@@ -41,8 +41,9 @@ namespace KIM
 
 class SpeciesName
 {
-  int speciesID;
  public:
+  int speciesNameID;
+
   SpeciesName();
   SpeciesName(int const id);
   bool operator==(SpeciesName const & rhs) const;
@@ -193,7 +194,7 @@ extern SpeciesName const user19;
 extern SpeciesName const user20;
 
 void get_number_of_species(int * const numberOfSpecies);
-int get_species(int const index, SpeciesName * const speciesName);
+int get_species_name(int const index, SpeciesName * const speciesName);
 }  // namespace SPECIES_NAME
 
 }  // namespace KIM

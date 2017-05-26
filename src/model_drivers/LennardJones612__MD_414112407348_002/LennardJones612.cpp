@@ -48,7 +48,7 @@
 //******************************************************************************
 extern "C"
 {
-int model_driver_init(KIM::Simulator * const simulator,
+int model_driver_init(KIM::ModelInitialization * const modelInitialization,
                       char const * const paramfile_names, int const nmstrlen,
                       int const numparamfiles)
 {
@@ -56,18 +56,18 @@ int model_driver_init(KIM::Simulator * const simulator,
 
   // read input files, convert units if needed, compute
   // interpolation coefficients, set cutoff, and publish parameters
-  LennardJones612* const simulatorObject
-      = new LennardJones612(simulator, paramfile_names, nmstrlen,
+  LennardJones612* const modelObject
+      = new LennardJones612(modelInitialization, paramfile_names, nmstrlen,
                             numparamfiles, &ier);
   if (ier)
   {
     // constructor already reported the error
-    delete simulatorObject;
+    delete modelObject;
     return ier;
   }
 
   // register pointer to LennardJones612 object in KIM object
-  simulator->set_model_buffer(static_cast<void*>(simulatorObject));
+  modelInitialization->set_model_buffer(static_cast<void*>(modelObject));
 
   // everything is good
   ier = false;
@@ -83,14 +83,14 @@ int model_driver_init(KIM::Simulator * const simulator,
 
 //******************************************************************************
 LennardJones612::LennardJones612(
-    KIM::Simulator * const simulator,
+    KIM::ModelInitialization * const modelInitialization,
     char const* const parameterFileNames,
     int const parameterFileNameLength,
     int const numberParameterFiles,
     int* const ier)
 {
   implementation_ = new LennardJones612Implementation(
-      simulator,
+      modelInitialization,
       parameterFileNames,
       parameterFileNameLength,
       numberParameterFiles,
@@ -105,18 +105,15 @@ LennardJones612::~LennardJones612()
 
 //******************************************************************************
 // static member function
-int LennardJones612::Destroy(KIM::Simulator * const simulator)
+int LennardJones612::Destroy(KIM::ModelDestroy * const modelDestroy)
 {
-  LennardJones612 * simulatorObject;
-  simulator->get_model_buffer(reinterpret_cast<void**>(&simulatorObject));
+  LennardJones612 * modelObject;
+  modelDestroy->get_model_buffer(reinterpret_cast<void**>(&modelObject));
 
-  if (simulatorObject != NULL)
+  if (modelObject != NULL)
   {
     // delete object itself
-    delete simulatorObject;
-
-    // nullify model buffer
-    simulator->set_model_buffer(NULL);
+    delete modelObject;
   }
 
   // everything is good
@@ -125,22 +122,22 @@ int LennardJones612::Destroy(KIM::Simulator * const simulator)
 
 //******************************************************************************
 // static member function
-int LennardJones612::Reinit(KIM::Simulator * const simulator)
+int LennardJones612::Reinit(
+    KIM::ModelReinitialization * const modelReinitialization)
 {
-  LennardJones612 * simulatorObject;
-  simulator->get_model_buffer(reinterpret_cast<void**>(&simulatorObject));
+  LennardJones612 * modelObject;
+  modelReinitialization->get_model_buffer(
+      reinterpret_cast<void**>(&modelObject));
 
-  return simulatorObject->implementation_->Reinit(simulator);
+  return modelObject->implementation_->Reinit(modelReinitialization);
 }
 
 //******************************************************************************
 // static member function
-int LennardJones612::Compute(KIM::Simulator const * const simulator,
-                             KIM::COMPUTE::SimulatorComputeArguments
-                             const * const arguments)
+int LennardJones612::Compute(KIM::ModelCompute const * const modelCompute)
 {
-  LennardJones612 * simulatorObject;
-  simulator->get_model_buffer(reinterpret_cast<void**>(&simulatorObject));
+  LennardJones612 * modelObject;
+  modelCompute->get_model_buffer(reinterpret_cast<void**>(&modelObject));
 
-  return simulatorObject->implementation_->Compute(simulator, arguments);
+  return modelObject->implementation_->Compute(modelCompute);
 }

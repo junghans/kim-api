@@ -37,12 +37,12 @@
 namespace KIM
 {
 
-SpeciesName::SpeciesName() : speciesID(0){}
-SpeciesName::SpeciesName(int const id) : speciesID(id){}
+SpeciesName::SpeciesName() : speciesNameID(0){}
+SpeciesName::SpeciesName(int const id) : speciesNameID(id){}
 bool SpeciesName::operator==(SpeciesName const & rhs) const
-{return speciesID==rhs.speciesID;}
+{return speciesNameID==rhs.speciesNameID;}
 bool SpeciesName::operator!=(SpeciesName const & rhs) const
-{return speciesID!=rhs.speciesID;}
+{return speciesNameID!=rhs.speciesNameID;}
 
 std::string SpeciesName::string() const
 {
@@ -336,7 +336,7 @@ void get_number_of_species(int * const numberOfSpecies)
   *numberOfSpecies = 139;
 }
 
-int get_species(int const index, SpeciesName * const speciesName)
+int get_species_name(int const index, SpeciesName * const speciesName)
 {
   switch (index)
   {
